@@ -1,0 +1,23 @@
+{
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": ["src"]
+    },
+    "logs": {
+        "text": "php://stderr",
+        "summary": "build/infection-summary.log"
+    },
+    "testFramework": "testo",
+    "minMsi": 90,
+    "mutators": {
+        "@default": true
+    }
+    // Four survivors are equivalent and intentionally not chased:
+    //  - min/max `<=`/`>=` → `<`/`>`: on equal inputs both branches return a
+    //    value-equal Duration (the contract is value equality via equals(),
+    //    not identity), so the mutation is unobservable without a brittle `===`
+    //    assertion that would contradict the value-object semantics.
+    //  - fromUnit `(float) $value` / `(float) $microsPerUnit` casts (×2): PHP
+    //    implicitly widens int→float on `int * float`, so the explicit casts
+    //    are stylistic, not behavioral.
+}

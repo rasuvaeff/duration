@@ -1,0 +1,63 @@
+# duration
+
+Install:
+
+```
+composer require rasuvaeff/duration
+```
+
+Type-safe, immutable, non-negative duration value object. One class:
+`Rasuvaeff\Duration\Duration`. Stored internally as microseconds.
+
+## Rules
+
+- PHP 8.3+, `declare(strict_types=1)`.
+- Immutable `final readonly class`; private constructor — build via static factories only.
+- Non-negative: a negative duration throws `InvalidArgumentException` ("Duration cannot be negative").
+- `seconds()` / `minutes()` accept `int|float`; a non-finite float (`INF`/`NAN`) throws `InvalidArgumentException` ("Duration must be finite").
+- `toMillis()` rounds **up** (`ceil`): a non-zero sub-millisecond duration never becomes `0` (`0ms` = "no timeout" to most clients). `toMicros()` is exact (storage unit); `toSeconds()` returns `float`.
+- `minus()` is **saturating**: subtracting a longer duration yields `0`, never negative. Comparisons go through `compareTo()`.
+- `min()` / `max()` are binary static factories (smaller / larger of two).
+- `__toString()` (Stringable) yields a human-readable form, choosing the largest unit with value >= 1: `"0"`, `"1µs"`, `"250ms"`, `"2.5s"`, `"1.5min"`, `"2h"`, `"1.5d"`. Milliseconds match `toMillis()` (rounded up); larger units use `%g` (trailing zeros trimmed). The format is an observable contract — changing it is a major bump.
+
+## API
+
+```php
+use Rasuvaeff\Duration\Duration;
+
+// Factories
+Duration::zero();              // 0
+Duration::micros(1_500);       // 1500µs
+Duration::millis(250);         // 250ms
+Duration::seconds(2.5);        // 2.5s  (int|float)
+Duration::minutes(1.5);        // 90s   (int|float)
+Duration::hours(1.5);          // 90min (int|float)
+Duration::days(0.5);           // 12h   (int|float)
+
+// Conversions
+$d = Duration::seconds(2.5);
+$d->toMicros();  // 2_500_000 (int, exact)
+$d->toMillis();  // 2500       (int, ceil)
+$d->toSeconds(); // 2.5        (float)
+$d->toMinutes(); // 0.041666…  (float)
+
+// Arithmetic
+Duration::millis(500)->plus(Duration::seconds(1));  // 1500ms
+Duration::seconds(5)->minus(Duration::seconds(2));  // 3s
+Duration::seconds(2)->minus(Duration::seconds(5));  // 0 (saturates)
+Duration::min(Duration::seconds(1), Duration::seconds(2));  // 1s
+Duration::max(Duration::seconds(1), Duration::seconds(2));  // 2s
+
+// Comparison
+$d->isZero();                              // bool
+$d->isPositive();                          // bool
+$d->equals(Duration::millis(2500));        // bool
+$d->compareTo(Duration::seconds(3));       // int -1|0|1
+$d->isGreaterThan(Duration::seconds(1));   // bool
+$d->isLessThan(Duration::seconds(3));      // bool
+
+// String (Stringable)
+(string) Duration::seconds(2.5);   // "2.5s"
+(string) Duration::micros(500);    // "500µs"
+(string) Duration::zero();         // "0"
+```
