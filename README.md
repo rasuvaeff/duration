@@ -7,6 +7,7 @@
 [![Psalm level](https://img.shields.io/badge/psalm-level_1-blue.svg)](https://github.com/rasuvaeff/duration/actions/workflows/static-analysis.yml)
 [![PHP](https://img.shields.io/packagist/dependency-v/rasuvaeff/duration/php)](https://packagist.org/packages/rasuvaeff/duration)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE.md)
+[Русская версия](README.ru.md)
 
 Type-safe, immutable, non-negative duration value object for PHP. Replaces bare
 `int` parameters (seconds? milliseconds?) with an explicit unit, removing a whole
