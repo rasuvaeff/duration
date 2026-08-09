@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 - Migrate the property-based test suite from the frozen `rasuvaeff/property-testing` 2.x to the new `rasuvaeff/property-testing-testo` adapter (drop-in, no PHP code changes; same `#[Property]` attribute and `Gen` API).
-- Persist the property regression corpus across coverage CI runs (restore before tests, env `PROPERTY_DB`, save on completion regardless of job status).
+- Persist the property regression corpus across coverage CI runs (restore before tests, env `PROPERTY_DB`, save on completion of any non-cancelled run, including failed ones).
 - Adopt `rasuvaeff/rector-named-literals` and apply the named-argument rule to literal calls.
 
 ## 1.0.0 — 2026-06-30
