@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Rasuvaeff\RectorNamedLiterals\AddNameToLiteralArgumentRector;
 use Rector\Config\RectorConfig;
 use Rector\DeadCode\Rector\ClassMethod\RemoveEmptyClassMethodRector;
 use Rector\DeadCode\Rector\ClassMethod\RemoveUnusedPrivateMethodRector;
@@ -14,6 +15,7 @@ return RectorConfig::configure()
     ])
     ->withPhpSets(php83: true)
     ->withPreparedSets(deadCode: true, codeQuality: true)
+    ->withRules([AddNameToLiteralArgumentRector::class])
     // The test suite is reflection-driven by design: #[Property] generator
     // methods are invoked by name via reflection, so Rector's static dead-code
     // analysis cannot see those call sites and would strip them. Exempt the
