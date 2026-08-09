@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Migrate the property-based test suite from the frozen `rasuvaeff/property-testing` 2.x to the new `rasuvaeff/property-testing-testo` adapter (drop-in, no PHP code changes; same `#[Property]` attribute and `Gen` API).
+- Persist the property regression corpus across coverage CI runs (restore before tests, env `PROPERTY_DB`, save on completion regardless of job status).
+- Adopt `rasuvaeff/rector-named-literals` and apply the named-argument rule to literal calls.
+
 ## 1.0.0 — 2026-06-30
 
 - Initial release: type-safe, immutable, non-negative duration value object (`Stringable`).
