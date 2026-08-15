@@ -6,6 +6,7 @@ namespace Rasuvaeff\Duration\Tests;
 
 use Rasuvaeff\Duration\Duration;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
+use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Property;
 use Testo\Assert;
@@ -281,7 +282,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function microsRoundTripGenerators(): array
+    public static function microsRoundTripGenerators(): array
     {
         return ['micros' => Gen::intBetween(0, 1_000_000_000)];
     }
@@ -293,7 +294,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function millisRoundTripGenerators(): array
+    public static function millisRoundTripGenerators(): array
     {
         return ['millis' => Gen::intBetween(0, 1_000_000)];
     }
@@ -308,7 +309,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function plusIsCommutativeGenerators(): array
+    public static function plusIsCommutativeGenerators(): array
     {
         return [
             'a' => Gen::intBetween(0, 100_000_000),
@@ -326,7 +327,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function plusIsAssociativeGenerators(): array
+    public static function plusIsAssociativeGenerators(): array
     {
         return [
             'a' => Gen::intBetween(0, 100_000_000),
@@ -343,8 +344,53 @@ final class DurationTest
         Assert::same($result->toMicros(), $a);
     }
 
+    /** @return iterable<string, array{int, int}> */
+    public static function plusThenMinusRoundTripsExamples(): iterable
+    {
+        yield 'zero and zero' => [0, 0];
+        yield 'subtracting nothing' => [1, 0];
+        yield 'adding nothing' => [0, 1];
+        yield 'a single microsecond each way' => [1, 1];
+    }
+
+    #[Property(runs: 300)]
+    public function minusSaturatesAtZeroInsteadOfGoingNegative(int $a, int $b): void
+    {
+        $result = Duration::micros($a)->minus(Duration::micros($b));
+
+        // The saturating branch is the whole reason minus() is not plain
+        // subtraction — a Duration cannot be negative, and the constructor
+        // throws rather than wrapping. Both sides have to be drawn or the
+        // property is about subtraction, not about saturation.
+        Classify::cover($b > $a, 'saturates at zero', 30.0);
+        Classify::cover($b <= $a, 'ordinary subtraction', 30.0);
+        Classify::when($a === $b, 'exactly zero by subtraction');
+
+        Assert::same($result->toMicros(), max(0, $a - $b));
+    }
+
     /** @return array<string, ArbitraryInterface> */
-    private function plusThenMinusRoundTripsGenerators(): array
+    public static function minusSaturatesAtZeroInsteadOfGoingNegativeGenerators(): array
+    {
+        // A shared range so both orderings are equally likely; two independent
+        // ranges would decide the split by how they happen to overlap.
+        return [
+            'a' => Gen::intBetween(0, 1_000_000),
+            'b' => Gen::intBetween(0, 1_000_000),
+        ];
+    }
+
+    /** @return iterable<string, array{int, int}> */
+    public static function minusSaturatesAtZeroInsteadOfGoingNegativeExamples(): iterable
+    {
+        yield 'equal operands' => [1_000, 1_000];
+        yield 'one microsecond short' => [999, 1_000];
+        yield 'one microsecond over' => [1_001, 1_000];
+        yield 'everything from nothing' => [0, 1_000_000];
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function plusThenMinusRoundTripsGenerators(): array
     {
         return [
             'a' => Gen::intBetween(0, 100_000_000),
@@ -362,7 +408,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function compareToIsAntisymmetricGenerators(): array
+    public static function compareToIsAntisymmetricGenerators(): array
     {
         return [
             'a' => Gen::intBetween(0, 1_000_000_000),
@@ -380,7 +426,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function minIsCommutativeGenerators(): array
+    public static function minIsCommutativeGenerators(): array
     {
         return [
             'a' => Gen::intBetween(0, 100_000_000),
@@ -398,7 +444,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function maxIsCommutativeGenerators(): array
+    public static function maxIsCommutativeGenerators(): array
     {
         return [
             'a' => Gen::intBetween(0, 100_000_000),
@@ -416,7 +462,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function minNeverExceedsEitherGenerators(): array
+    public static function minNeverExceedsEitherGenerators(): array
     {
         return [
             'a' => Gen::intBetween(0, 100_000_000),
@@ -434,7 +480,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function maxNeverUndershootsEitherGenerators(): array
+    public static function maxNeverUndershootsEitherGenerators(): array
     {
         return [
             'a' => Gen::intBetween(0, 100_000_000),
@@ -451,7 +497,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function minMaxAbsorptionGenerators(): array
+    public static function minMaxAbsorptionGenerators(): array
     {
         return [
             'a' => Gen::intBetween(0, 100_000_000),
@@ -466,7 +512,7 @@ final class DurationTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function toStringMatchesFormatGenerators(): array
+    public static function toStringMatchesFormatGenerators(): array
     {
         return ['micros' => Gen::intBetween(0, 100_000_000_000)];
     }
