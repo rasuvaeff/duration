@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 1.1.0 — 2026-08-21
+
 - Check the README examples on every build with `rasuvaeff/doc-exec`: the usage
   block in `README.md` and `README.ru.md` is executed against the real
   `Duration` API, and `composer build` fails if an example stops matching it.
