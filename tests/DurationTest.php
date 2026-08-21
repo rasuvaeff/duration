@@ -168,6 +168,18 @@ final class DurationTest
         yield 'x.5 below rounds up too' => [0.000_001_5, 2];
     }
 
+    /**
+     * The negative side must go through round() too: -0.6 µs rounds to -1
+     * and is rejected as negative. A truncating path would collapse it to 0
+     * and silently accept a negative input as the zero duration.
+     */
+    public function tinyNegativeFractionIsRejectedNotTruncatedToZero(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration cannot be negative');
+
+        Duration::seconds(-0.000_000_6);
+    }
+
     #[DataProvider('subMicroRoundingProvider')]
     public function secondsRoundToNearestMicro(float $seconds, int $expectedMicros): void
     {

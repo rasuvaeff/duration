@@ -295,8 +295,11 @@ final readonly class Duration implements \Stringable
         // mathematical no-op — and PHP >= 8.4 has a round() regression that
         // returns n+1 for even integer-valued floats in [2^52, 2^53)
         // (round(4503599627370496.0) === 4503599627370497.0), which corrupted
-        // e.g. days(86165) by +1 µs. Skip it where it cannot matter.
-        if ($micros < 2 ** 52 && $micros > -(2 ** 52)) {
+        // e.g. days(86165) by +1 µs. Skip it where it cannot matter. One-sided
+        // on purpose: every negative product either rounds within the window
+        // or is integral past it, and ends in the constructor's negative-value
+        // rejection either way.
+        if ($micros < 2 ** 52) {
             $micros = round($micros);
         }
 
