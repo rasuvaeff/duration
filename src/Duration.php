@@ -41,6 +41,13 @@ final readonly class Duration implements \Stringable
 
     public static function millis(int $millis): self
     {
+        // The same overflow contract as plus()/fromUnit(): the product would
+        // silently become a float past PHP_INT_MAX, and the strict-typed
+        // constructor would throw an unrelated TypeError instead.
+        if ($millis > intdiv(\PHP_INT_MAX, self::MICROS_PER_MILLI)) {
+            throw new \InvalidArgumentException('Duration overflow: value exceeds the maximum representable duration');
+        }
+
         return new self(micros: $millis * self::MICROS_PER_MILLI);
     }
 
@@ -72,10 +79,15 @@ final readonly class Duration implements \Stringable
     /**
      * Whole milliseconds, rounded up: a non-zero sub-millisecond duration never
      * collapses to 0 (0ms means "no timeout" to most clients).
+     *
+     * Integer arithmetic, not `ceil()` over a float division: above 2^53 µs
+     * (~285 years) float division loses integer precision and the "exact
+     * ceil" this method promises would be off by ±1 ms.
      */
     public function toMillis(): int
     {
-        return (int) ceil($this->micros / self::MICROS_PER_MILLI);
+        return intdiv($this->micros, self::MICROS_PER_MILLI)
+            + ($this->micros % self::MICROS_PER_MILLI !== 0 ? 1 : 0);
     }
 
     public function toSeconds(): float
@@ -158,21 +170,26 @@ final readonly class Duration implements \Stringable
     }
 
     /**
-     * Human-readable representation, choosing the largest unit with a
-     * *displayed* value of at least 1: `"2.5s"`, `"250ms"`, `"1µs"`,
-     * `"90min"`, `"2h"`, `"1.5d"`; `"0"` for the zero duration. Microseconds
-     * and milliseconds are integers (milliseconds follow `toMillis()`, i.e.
+     * Human-readable representation: `"2.5s"`, `"250ms"`, `"1µs"`, `"90min"`,
+     * `"2h"`, `"1.5d"`; `"0"` for the zero duration. Microseconds and
+     * milliseconds are integers (milliseconds follow `toMillis()`, i.e.
      * rounded up); larger units use the `%g` general format (trailing zeros
      * trimmed).
      *
-     * Each unit's rounded value is checked against the next unit's boundary:
-     * a duration that rounds up to a whole unit of the next tier (e.g.
-     * 999.5ms, which `toMillis()` rounds up to `1000`) is displayed in that
-     * next unit instead, so the printed value never reads as a different
-     * order of magnitude than the one actually chosen.
+     * The unit is chosen by checking each tier's *rounded* value against the
+     * next unit's boundary — not by a "displayed value ≥ 1" rule. A duration
+     * that rounds up to a whole unit of the next tier (e.g. 999.5ms, which
+     * `toMillis()` rounds up to `1000`) is displayed in that next unit
+     * instead, so the printed value never reads as a different order of
+     * magnitude than the one actually chosen. The flip side: such fall-through
+     * values print as slightly-below-1 amounts of the next unit — `"0.9995s"`,
+     * `"0.999999min"`, `"0.999999d"` — by design.
      *
      * The unit set, the rounding, and the suffix spelling are an observable
-     * contract — changing them is a major version bump.
+     * contract — changing them is a major version bump. (One deliberate
+     * asymmetry: `%g` rounds half-to-even, while the plain-integer day
+     * rendering past `%g`'s precision rounds half-away-from-zero — both ties
+     * are astronomically large and the difference is not worth a branch.)
      */
     #[\Override]
     public function __toString(): string
@@ -241,11 +258,27 @@ final readonly class Duration implements \Stringable
 
     private static function fromUnit(int|float $value, int $microsPerUnit): self
     {
-        if (is_float($value) && !is_finite($value)) {
+        // Integer inputs stay in integer arithmetic end to end: routing them
+        // through float would lose precision once the product exceeds 2^53
+        // (e.g. seconds(9_223_372_036_853) came out 192 µs off), even though
+        // the exact result exists and is representable. Overflow detection is
+        // the same as plus(): int * int silently widens to float past
+        // PHP_INT_MAX.
+        if (is_int($value)) {
+            $micros = $value * $microsPerUnit;
+
+            if (!is_int($micros)) {
+                throw new \InvalidArgumentException('Duration overflow: value exceeds the maximum representable duration');
+            }
+
+            return new self(micros: $micros);
+        }
+
+        if (!is_finite($value)) {
             throw new \InvalidArgumentException('Duration must be finite');
         }
 
-        $micros = round((float) $value * (float) $microsPerUnit);
+        $micros = $value * (float) $microsPerUnit;
 
         // PHP_INT_MAX (2^63 - 1) has no exact double representation and casts
         // to (float) PHP_INT_MAX === 2^63 — one past the real maximum — so a
@@ -255,6 +288,19 @@ final readonly class Duration implements \Stringable
         // as-is on the lower bound.
         if ($micros >= (float) \PHP_INT_MAX || $micros < (float) \PHP_INT_MIN) {
             throw new \InvalidArgumentException('Duration overflow: value exceeds the maximum representable duration');
+        }
+
+        // Every double at magnitude >= 2^52 is already integral (the spacing
+        // between representable values there is >= 1.0), so round() is a
+        // mathematical no-op — and PHP >= 8.4 has a round() regression that
+        // returns n+1 for even integer-valued floats in [2^52, 2^53)
+        // (round(4503599627370496.0) === 4503599627370497.0), which corrupted
+        // e.g. days(86165) by +1 µs. Skip it where it cannot matter. One-sided
+        // on purpose: every negative product either rounds within the window
+        // or is integral past it, and ends in the constructor's negative-value
+        // rejection either way.
+        if ($micros < 2 ** 52) {
+            $micros = round($micros);
         }
 
         return new self(micros: (int) $micros);

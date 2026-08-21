@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 1.1.1 — 2026-08-21
+
+- Fix `toMillis()` violating its exact-ceil contract above 2^53 microseconds (~285 years): float division lost integer precision and the result was off by ±1 ms in both directions (including round-DOWN, the exact failure the contract forbids). Now pure integer arithmetic (`intdiv` + remainder), exact over the full range.
+- Fix `millis()` — the one factory without an overflow guard: past `PHP_INT_MAX` the product silently became a float and the constructor threw an unrelated `TypeError` instead of the contractual `InvalidArgumentException('Duration overflow: ...')`.
+- Fix integer inputs to `seconds()`/`minutes()`/`hours()`/`days()` losing precision through the float path once the product exceeded 2^53 (e.g. `seconds(9_223_372_036_853)` came out 192 µs off): integer inputs now stay in integer arithmetic end to end, with the same overflow contract as `plus()`.
+- Sidestep the PHP >= 8.4 `round()` regression that returns n+1 for even integer-valued floats in [2^52, 2^53) (corrupted e.g. `days(86165)` by +1 µs on 8.4/8.5): `round()` is now skipped for float products at magnitude >= 2^52, where every representable double is already integral and rounding is a mathematical no-op.
+- Docs: rewrite the `__toString()` docblock — the unit is chosen by boundary fall-through of rounded values, not by a "displayed value >= 1" rule (fall-through can legitimately print `"0.999999min"`); note the deliberate half-to-even vs half-away tie asymmetry between `%g` and the plain-integer day rendering. Both sub-unit fall-through outputs and the half-away rounding of the float factories are now pinned by tests.
+- Test hardening: `toMillis` property against an integer-ceil oracle over the full `[0, PHP_INT_MAX]` range; `microsRoundTrip`/`millisRoundTrip` generators widened to the full valid ranges (the old caps were orders of magnitude below the bug zones); exactness properties and examples for the integer factories.
+
 ## 1.1.0 — 2026-08-21
 
 - Check the README examples on every build with `rasuvaeff/doc-exec`: the usage

@@ -60,6 +60,124 @@ final class DurationTest
         yield 'fraction below half still rounds up' => [Duration::micros(1_200), 2];
         yield 'fraction above half rounds up' => [Duration::micros(1_800), 2];
         yield 'zero stays zero' => [Duration::zero(), 0];
+        // Above 2^53 µs float division loses integer precision: the old
+        // (int) ceil($micros / 1000) returned 9007199254741 here - a
+        // round-DOWN, violating the exact-ceil contract.
+        yield 'first value past 2^53 that float division got wrong' => [Duration::micros(9_007_199_254_741_001), 9_007_199_254_742];
+        yield 'PHP_INT_MAX' => [Duration::micros(\PHP_INT_MAX), intdiv(\PHP_INT_MAX, 1_000) + 1];
+        yield 'exact multiple of 1000 above 2^53 must not round up' => [Duration::micros(9_196_105_871_194_011_000), 9_196_105_871_194_011];
+    }
+
+    /**
+     * The exact-ceil contract over the full int range, checked against pure
+     * integer arithmetic - float division diverges from it above 2^53 µs.
+     */
+    #[Property(runs: 300)]
+    public function toMillisMatchesIntegerCeilOverTheFullRange(int $micros): void
+    {
+        $expected = intdiv($micros, 1_000) + ($micros % 1_000 !== 0 ? 1 : 0);
+
+        Assert::same(Duration::micros($micros)->toMillis(), $expected);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function toMillisMatchesIntegerCeilOverTheFullRangeGenerators(): array
+    {
+        return ['micros' => Gen::intBetween(0, \PHP_INT_MAX)];
+    }
+
+    /** @return iterable<string, array{int}> */
+    public static function toMillisMatchesIntegerCeilOverTheFullRangeExamples(): iterable
+    {
+        yield 'first wrong value of the old float implementation' => [9_007_199_254_741_001];
+        yield 'PHP_INT_MAX' => [\PHP_INT_MAX];
+        yield 'exactly 2^53' => [9_007_199_254_740_992];
+    }
+
+    public function millisRejectsOverflowInsteadOfSilentlyWrapping(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration overflow');
+
+        Duration::millis(intdiv(\PHP_INT_MAX, 1_000) + 1);
+    }
+
+    public function millisAtTheOverflowBoundaryStillSucceeds(): void
+    {
+        Assert::same(Duration::millis(intdiv(\PHP_INT_MAX, 1_000))->toMicros(), intdiv(\PHP_INT_MAX, 1_000) * 1_000);
+    }
+
+    /**
+     * Integer inputs must stay in integer arithmetic end to end: the old
+     * float path lost precision once the product exceeded 2^53 (e.g.
+     * seconds(9_223_372_036_853) came out 192 µs off), and PHP >= 8.4's
+     * round() regression additionally corrupted integer-valued floats in
+     * [2^52, 2^53) by +1 (days(86165) gained a microsecond on 8.4/8.5).
+     */
+    #[Property(runs: 200)]
+    public function intFactoriesAreExact(int $seconds): void
+    {
+        Assert::same(Duration::seconds($seconds)->toMicros(), $seconds * 1_000_000);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function intFactoriesAreExactGenerators(): array
+    {
+        return ['seconds' => Gen::intBetween(0, intdiv(\PHP_INT_MAX, 1_000_000))];
+    }
+
+    /** @return iterable<string, array{int}> */
+    public static function intFactoriesAreExactExamples(): iterable
+    {
+        yield 'product 192 micros off on the old float path' => [9_223_372_036_853];
+        yield 'round() regression territory' => [4_600_000_000];
+    }
+
+    #[DataProvider('intFactoryExactnessProvider')]
+    public function intFactoryProductsAreExactInEveryUnit(Duration $duration, int $expectedMicros): void
+    {
+        Assert::same($duration->toMicros(), $expectedMicros);
+    }
+
+    public static function intFactoryExactnessProvider(): iterable
+    {
+        yield 'days(86165): +1 microsecond on PHP >= 8.4 via the old round()' => [Duration::days(86_165), 7_444_656_000_000_000];
+        yield 'hours(1390967)' => [Duration::hours(1_390_967), 5_007_481_200_000_000];
+        yield 'minutes at the precision edge' => [Duration::minutes(153_722_867_280), 9_223_372_036_800_000_000];
+    }
+
+    /**
+     * A float input whose product lands in [2^52, 2^53) is already integral
+     * (double spacing there is exactly 1.0) - round() must be skipped there,
+     * both as a no-op and to sidestep the PHP >= 8.4 regression that returns
+     * n+1 for even integer-valued floats in that range.
+     */
+    public function floatInputInTheRoundRegressionRangeStaysExact(): void
+    {
+        Assert::same(Duration::days(52_125.0)->toMicros(), 4_503_600_000_000_000);
+    }
+
+    #[DataProvider('halfAwayRoundingProvider')]
+    public function floatFactoriesRoundHalfAwayFromZero(float $seconds, int $expectedMicros): void
+    {
+        Assert::same(Duration::seconds($seconds)->toMicros(), $expectedMicros);
+    }
+
+    public static function halfAwayRoundingProvider(): iterable
+    {
+        yield 'x.5 rounds away from zero' => [0.000_002_5, 3];
+        yield 'x.5 below rounds up too' => [0.000_001_5, 2];
+    }
+
+    /**
+     * The negative side must go through round() too: -0.6 µs rounds to -1
+     * and is rejected as negative. A truncating path would collapse it to 0
+     * and silently accept a negative input as the zero duration.
+     */
+    public function tinyNegativeFractionIsRejectedNotTruncatedToZero(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration cannot be negative');
+
+        Duration::seconds(-0.000_000_6);
     }
 
     #[DataProvider('subMicroRoundingProvider')]
@@ -246,6 +364,8 @@ final class DurationTest
         yield 'days' => [Duration::days(1.5), '1.5d'];
         yield 'days boundary (1d)' => [Duration::micros(86_400_000_000), '1d'];
         yield 'ms rounding into the next second falls through to seconds' => [Duration::micros(999_500), '0.9995s'];
+        yield 'fall-through can print a sub-1 minute value' => [Duration::micros(59_999_953), '0.999999min'];
+        yield 'fall-through can print a sub-1 day value' => [Duration::micros(86_399_928_000), '0.999999d'];
         yield 'seconds rounding into the next minute falls through to minutes' => [Duration::micros(59_999_999), '1min'];
         yield 'minutes rounding into the next hour falls through to hours' => [Duration::micros(3_599_999_940), '1h'];
         yield 'hours rounding into the next day falls through to days' => [Duration::micros(86_399_996_400), '1d'];
@@ -351,7 +471,7 @@ final class DurationTest
     /** @return array<string, ArbitraryInterface> */
     public static function microsRoundTripGenerators(): array
     {
-        return ['micros' => Gen::intBetween(0, 1_000_000_000)];
+        return ['micros' => Gen::intBetween(0, \PHP_INT_MAX)];
     }
 
     #[Property(runs: 200)]
@@ -363,7 +483,10 @@ final class DurationTest
     /** @return array<string, ArbitraryInterface> */
     public static function millisRoundTripGenerators(): array
     {
-        return ['millis' => Gen::intBetween(0, 1_000_000)];
+        // The full valid range: the old cap of 1e6 was 9000x below the zone
+        // where the float-based toMillis() lost precision, so the round-trip
+        // could never falsify that bug.
+        return ['millis' => Gen::intBetween(0, intdiv(\PHP_INT_MAX, 1_000))];
     }
 
     #[Property]

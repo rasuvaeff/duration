@@ -26,13 +26,34 @@
                 "if \\(\\(float\\) \\$seconds < 60\\.0\\) \\{",
                 "if \\(\\(float\\) \\$minutes < 60\\.0\\) \\{",
                 "if \\(\\(float\\) \\$hours < 24\\.0\\) \\{",
-                // int * float already widens to float regardless of which
-                // operand carries the explicit cast.
-                "\\$micros = round\\(\\(float\\) \\$value \\* \\(float\\) \\$microsPerUnit\\);",
+                // float * int already widens to float regardless of the
+                // explicit cast on the multiplier.
+                "\\$micros = \\$value \\* \\(float\\) \\$microsPerUnit;",
                 // float >= / < int coerces the int operand to float the same
                 // way (float) does; see the comment on this line in Duration.php.
                 "if \\(\\$micros >= \\(float\\) \\\\PHP_INT_MAX \\|\\| \\$micros < \\(float\\) \\\\PHP_INT_MIN\\) \\{"
             ]
+        },
+        // The round()-skip threshold guard (`if ($micros < 2 ** 52)`) sits in
+        // a numeric dead zone: shrinking or bending the threshold is
+        // observable only for a float product carrying an exact .5 fraction
+        // between the mutated and the real boundary (2^51..2^53) — and no
+        // representable float input maps to such a product through the fixed
+        // unit multipliers. The guard's purpose (skipping round() where every
+        // double is integral, incl. the PHP >= 8.4 round() regression zone)
+        // is pinned positively by intFactoryProductsAreExactInEveryUnit and
+        // floatInputInTheRoundRegressionRangeStaysExact instead.
+        "DecrementInteger": {
+            "ignoreSourceCodeByRegex": ["if \\(\\$micros < 2 \\*\\* 52\\) \\{"]
+        },
+        "IncrementInteger": {
+            "ignoreSourceCodeByRegex": ["if \\(\\$micros < 2 \\*\\* 52\\) \\{"]
+        },
+        "Exponentiation": {
+            "ignoreSourceCodeByRegex": ["if \\(\\$micros < 2 \\*\\* 52\\) \\{"]
+        },
+        "LessThan": {
+            "ignoreSourceCodeByRegex": ["if \\(\\$micros < 2 \\*\\* 52\\) \\{"]
         }
     }
     // min/max `<=`/`>=` → `<`/`>` survive for a different reason: on equal
