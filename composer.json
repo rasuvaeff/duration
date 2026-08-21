@@ -29,6 +29,7 @@
         "friendsofphp/php-cs-fixer": "^3.95",
         "infection/infection": "^0.33",
         "maglnet/composer-require-checker": "^4.17",
+        "rasuvaeff/doc-exec": "^0.1",
         "rasuvaeff/property-testing-testo": "^0.4",
         "rasuvaeff/rector-named-literals": "^1.0",
         "rector/rector": "^2.4",
@@ -68,10 +69,12 @@
             "@require-checker",
             "@cs",
             "@psalm",
-            "@test"
+            "@test",
+            "@docs"
         ],
         "cs": "php-cs-fixer fix --dry-run --diff --config=.php-cs-fixer.php",
         "cs:fix": "php-cs-fixer fix --diff --config=.php-cs-fixer.php",
+        "docs": "php vendor/bin/doc-exec README.md README.ru.md",
         "mutation": "infection --threads=max",
         "psalm": "psalm --no-cache",
         "rector": "rector process --dry-run",

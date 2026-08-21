@@ -60,6 +60,13 @@ make release-check
 
 ## Invariants & gotchas
 
+- **The README usage block is executed, not illustrative.** It is fenced as
+  ```` ```php doc-exec ```` in both languages, and `composer build` runs
+  `composer docs` over both files, so a `// =>` value that stops matching the
+  real API fails the build. Keep the two blocks identical apart from the prose
+  around them, and when you change the public API, update the expected values
+  rather than dropping the marker.
+
 - Storage unit is **microseconds** (`int`). `toMicros()` is exact; `toMillis()`
   uses `ceil` so sub-millisecond spans never floor to `0`; `toSeconds()` and
   `toMinutes()` are `float`. Factories cover `micros` → `days`; `seconds()`/

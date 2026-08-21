@@ -29,20 +29,21 @@ composer require rasuvaeff/duration
 
 ## Usage
 
-```php
+```php doc-exec
 use Rasuvaeff\Duration\Duration;
 
 $timeout = Duration::seconds(2.5);
 
-$timeout->toMillis();  // 2500
-$timeout->toMicros();  // 2500000
-$timeout->toSeconds(); // 2.5
+$timeout->toMillis();  // => 2500
+$timeout->toMicros();  // => 2500000
+$timeout->toSeconds(); // => 2.5
 
-$total = Duration::millis(500)->plus(Duration::seconds(1)); // 1500ms
+$total = Duration::millis(500)->plus(Duration::seconds(1));
+$total->toMillis(); // => 1500
 
-Duration::seconds(1)->isGreaterThan(Duration::millis(500)); // true
+Duration::seconds(1)->isGreaterThan(Duration::millis(500)); // => true
 
-echo Duration::minutes(1.5); // "1.5min"
+echo Duration::minutes(1.5); // outputs 1.5min
 ```
 
 ### Factories

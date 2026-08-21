@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Check the README examples on every build with `rasuvaeff/doc-exec`: the usage
+  block in `README.md` and `README.ru.md` is executed against the real
+  `Duration` API, and `composer build` fails if an example stops matching it.
 - Migrate the property-based test suite from the frozen `rasuvaeff/property-testing` 2.x to the new `rasuvaeff/property-testing-testo` adapter (drop-in, no PHP code changes; same `#[Property]` attribute and `Gen` API).
 - Persist the property regression corpus across coverage CI runs (restore before tests, env `PROPERTY_DB`, save on completion of any non-cancelled run, including failed ones).
 - Adopt `rasuvaeff/rector-named-literals` and apply the named-argument rule to literal calls.
