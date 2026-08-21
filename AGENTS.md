@@ -8,7 +8,7 @@ Guidance for AI agents working on this package. Read before changing code.
 `Rasuvaeff\Duration\Duration` (namespace `Rasuvaeff\Duration`), implementing
 `\Stringable`. It models a non-negative time span, stored internally as
 microseconds, with named factories (`zero`/`micros`/`millis`/`seconds`/`minutes`/`hours`/`days`),
-conversions (`toMicros`/`toMillis`/`toSeconds`/`toMinutes`), saturating arithmetic
+conversions (`toMicros`/`toMillis`/`toSeconds`/`toMinutes`), arithmetic
 (`plus`/`minus`), binary static `min`/`max`, and comparison
 (`isZero`/`isPositive`/`equals`/`compareTo`/`isGreaterThan`/`isLessThan`). It is
 the foundation for timeout/wait/lease parameters across the resilience packages
@@ -72,11 +72,19 @@ make release-check
   `toMinutes()` are `float`. Factories cover `micros` → `days`; `seconds()`/
   `minutes()`/`hours()`/`days()` accept `int|float` and round to the nearest
   microsecond.
-- `__toString()` chooses the largest unit with value ≥ 1 (`"0"`, `"1µs"`,
-  `"250ms"`, `"2.5s"`, `"1.5min"`, `"2h"`, `"1.5d"`). Milliseconds reuse
-  `toMillis()` (rounded up); larger units use `%g`. Keep the branch order
-  strictly increasing by unit boundary — boundary cases (exactly 1000µs, 1s, …)
-  are what kill mutation survivors.
+- `__toString()` chooses the largest unit with a *displayed* value ≥ 1 (`"0"`,
+  `"1µs"`, `"250ms"`, `"2.5s"`, `"1.5min"`, `"2h"`, `"1.5d"`). Milliseconds
+  reuse `toMillis()` (rounded up); larger units use `%g`. Each unit's rounded
+  value is checked against the next unit's boundary before it's used — a
+  duration that rounds up to a whole unit of the next tier (e.g. 999.5ms →
+  `"1000"` via `toMillis()`'s ceil) falls through to that next unit instead
+  (`"0.9995s"`, not `"1000ms"`), so the same rounding artifact can't recur at
+  the s/min/h boundaries either. Keep the branch order strictly increasing by
+  unit boundary — boundary cases (exactly 1000µs, 1s, and values that round
+  *up to* one of those from below) are what kill mutation survivors.
+  `formatDays()` falls back to `number_format()` instead of `%g` once the day
+  count is large enough that `%g` would emit scientific notation (six
+  significant digits) — `%g` is otherwise used as-is everywhere else.
 - All comparisons funnel through `compareTo()` (single `<=>` on micros) — keep
   it that way so `equals`/`isGreaterThan`/`isLessThan` cannot drift. The
   equal-boundary case is what kills mutation survivors; keep three-case tests
@@ -86,6 +94,13 @@ make release-check
 - `minus()` is **saturating** (clamps to zero, never negative) — the correct
   policy for "time remaining" math. Changing it to throw/allow-negative is a
   **major** bump.
+- `plus()` throws `InvalidArgumentException` (`'Duration overflow: ...'`) if the
+  sum would exceed `PHP_INT_MAX` microseconds, rather than silently overflowing
+  into a `float` and letting the constructor's strict `int` type throw an
+  unrelated `TypeError`. `fromUnit()` (backing `seconds`/`minutes`/`hours`/`days`)
+  applies the same overflow check before casting to `int`, rather than silently
+  truncating to an unrelated value — a duration/timeout primitive must fail
+  loudly on overflow, never produce a wrong-but-plausible result.
 - Code: `declare(strict_types=1)`, `final readonly class`, `#[\Override]`,
   explicit types.
 - `examples/` is part of the public contract: keep scripts runnable and update
