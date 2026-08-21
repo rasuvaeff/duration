@@ -90,7 +90,13 @@ final readonly class Duration implements \Stringable
 
     public function plus(self $other): self
     {
-        return new self(micros: $this->micros + $other->micros);
+        $sum = $this->micros + $other->micros;
+
+        if (!is_int($sum)) {
+            throw new \InvalidArgumentException('Duration overflow: sum exceeds the maximum representable duration');
+        }
+
+        return new self(micros: $sum);
     }
 
     /**
@@ -152,11 +158,18 @@ final readonly class Duration implements \Stringable
     }
 
     /**
-     * Human-readable representation, choosing the largest unit with a value of
-     * at least 1: `"2.5s"`, `"250ms"`, `"1µs"`, `"90min"`, `"2h"`, `"1.5d"`;
-     * `"0"` for the zero duration. Microseconds and milliseconds are integers
-     * (milliseconds follow `toMillis()`, i.e. rounded up); larger units use the
-     * `%g` general format (trailing zeros trimmed).
+     * Human-readable representation, choosing the largest unit with a
+     * *displayed* value of at least 1: `"2.5s"`, `"250ms"`, `"1µs"`,
+     * `"90min"`, `"2h"`, `"1.5d"`; `"0"` for the zero duration. Microseconds
+     * and milliseconds are integers (milliseconds follow `toMillis()`, i.e.
+     * rounded up); larger units use the `%g` general format (trailing zeros
+     * trimmed).
+     *
+     * Each unit's rounded value is checked against the next unit's boundary:
+     * a duration that rounds up to a whole unit of the next tier (e.g.
+     * 999.5ms, which `toMillis()` rounds up to `1000`) is displayed in that
+     * next unit instead, so the printed value never reads as a different
+     * order of magnitude than the one actually chosen.
      *
      * The unit set, the rounding, and the suffix spelling are an observable
      * contract — changing them is a major version bump.
@@ -172,23 +185,31 @@ final readonly class Duration implements \Stringable
             return $this->micros . 'µs';
         }
 
-        if ($this->micros < self::MICROS_PER_SECOND) {
-            return $this->toMillis() . 'ms';
+        $millis = $this->toMillis();
+
+        if ($millis < 1_000) {
+            return $millis . 'ms';
         }
 
-        if ($this->micros < self::MICROS_PER_MINUTE) {
-            return \sprintf('%g', $this->toSeconds()) . 's';
+        $seconds = \sprintf('%g', $this->toSeconds());
+
+        if ((float) $seconds < 60.0) {
+            return $seconds . 's';
         }
 
-        if ($this->micros < self::MICROS_PER_HOUR) {
-            return \sprintf('%g', $this->toMinutes()) . 'min';
+        $minutes = \sprintf('%g', $this->toMinutes());
+
+        if ((float) $minutes < 60.0) {
+            return $minutes . 'min';
         }
 
-        if ($this->micros < self::MICROS_PER_DAY) {
-            return \sprintf('%g', $this->toHours()) . 'h';
+        $hours = \sprintf('%g', $this->toHours());
+
+        if ((float) $hours < 24.0) {
+            return $hours . 'h';
         }
 
-        return \sprintf('%g', $this->toDays()) . 'd';
+        return self::formatDays($this->toDays());
     }
 
     private function toHours(): float
@@ -201,12 +222,35 @@ final readonly class Duration implements \Stringable
         return $this->micros / self::MICROS_PER_DAY;
     }
 
+    /**
+     * `%g` falls back to scientific notation once the exponent reaches its
+     * default precision (six significant digits). At that magnitude the
+     * fractional part carries no meaningful information anyway, so the exact
+     * whole number of days is rendered instead of a lossy `"1.23457e+6"`.
+     */
+    private static function formatDays(float $days): string
+    {
+        $formatted = \sprintf('%g', $days);
+
+        if (\stripos($formatted, 'e') !== false) {
+            return \number_format($days, 0, '.', '') . 'd';
+        }
+
+        return $formatted . 'd';
+    }
+
     private static function fromUnit(int|float $value, int $microsPerUnit): self
     {
         if (is_float($value) && !is_finite($value)) {
             throw new \InvalidArgumentException('Duration must be finite');
         }
 
-        return new self(micros: (int) round((float) $value * (float) $microsPerUnit));
+        $micros = round((float) $value * (float) $microsPerUnit);
+
+        if ($micros > (float) \PHP_INT_MAX || $micros < (float) \PHP_INT_MIN) {
+            throw new \InvalidArgumentException('Duration overflow: value exceeds the maximum representable duration');
+        }
+
+        return new self(micros: (int) $micros);
     }
 }

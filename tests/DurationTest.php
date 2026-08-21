@@ -245,6 +245,12 @@ final class DurationTest
         yield 'hours boundary (1h)' => [Duration::micros(3_600_000_000), '1h'];
         yield 'days' => [Duration::days(1.5), '1.5d'];
         yield 'days boundary (1d)' => [Duration::micros(86_400_000_000), '1d'];
+        yield 'ms rounding into the next second falls through to seconds' => [Duration::micros(999_500), '0.9995s'];
+        yield 'seconds rounding into the next minute falls through to minutes' => [Duration::micros(59_999_999), '1min'];
+        yield 'minutes rounding into the next hour falls through to hours' => [Duration::micros(3_599_999_940), '1h'];
+        yield 'hours rounding into the next day falls through to days' => [Duration::micros(86_399_996_400), '1d'];
+        yield 'day count beyond %g precision renders as a plain integer, not scientific notation' => [Duration::days(1_000_000), '1000000d'];
+        yield 'fractional day count beyond %g precision also avoids scientific notation' => [Duration::days(1_234_567), '1234567d'];
     }
 
     public function rejectsNegativeMicros(): void
@@ -273,6 +279,27 @@ final class DurationTest
         Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration must be finite');
 
         Duration::minutes(NAN);
+    }
+
+    public function plusRejectsOverflowInsteadOfSilentlyWrapping(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration overflow');
+
+        Duration::micros(\PHP_INT_MAX - 10)->plus(Duration::micros(20));
+    }
+
+    public function plusAtTheOverflowBoundaryStillSucceeds(): void
+    {
+        $sum = Duration::micros(\PHP_INT_MAX - 10)->plus(Duration::micros(10));
+
+        Assert::same($sum->toMicros(), \PHP_INT_MAX);
+    }
+
+    public function fromUnitRejectsOverflowInsteadOfSilentlyTruncating(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration overflow');
+
+        Duration::days(\PHP_INT_MAX);
     }
 
     #[Property(runs: 200)]
@@ -514,6 +541,41 @@ final class DurationTest
     /** @return array<string, ArbitraryInterface> */
     public static function toStringMatchesFormatGenerators(): array
     {
-        return ['micros' => Gen::intBetween(0, 100_000_000_000)];
+        // Upper bound reaches past the 1,000,000-day mark, where %g's default
+        // six-significant-digit precision would otherwise fall back to
+        // scientific notation (see formatDaysAvoidsScientificNotation below).
+        return ['micros' => Gen::intBetween(0, 200_000_000_000_000_000)];
+    }
+
+    /** @return iterable<string, array{int}> */
+    public static function toStringMatchesFormatExamples(): iterable
+    {
+        yield 'ms rounds up into the next second' => [999_500];
+        yield 'seconds round up into the next minute' => [59_999_999];
+        yield 'minutes round up into the next hour' => [3_599_999_940];
+        yield 'hours round up into the next day' => [86_399_996_400];
+        yield 'day count beyond %g precision' => [1_000_000 * 86_400_000_000];
+    }
+
+    #[Property(runs: 50)]
+    public function formatDaysAvoidsScientificNotation(int $days): void
+    {
+        Assert::false(str_contains((string) Duration::days($days), 'e'));
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function formatDaysAvoidsScientificNotationGenerators(): array
+    {
+        // Upper bound stays under PHP_INT_MAX microseconds (~106,751,991 days
+        // is the largest representable day count) — this property is about
+        // formatting, not about the separate overflow-rejection behavior.
+        return ['days' => Gen::intBetween(1_000_000, 100_000_000)];
+    }
+
+    /** @return iterable<string, array{int}> */
+    public static function formatDaysAvoidsScientificNotationExamples(): iterable
+    {
+        yield 'exactly at the %g scientific-notation threshold' => [1_000_000];
+        yield 'fractional-looking large count' => [1_234_567];
     }
 }
