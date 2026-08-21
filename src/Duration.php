@@ -247,7 +247,13 @@ final readonly class Duration implements \Stringable
 
         $micros = round((float) $value * (float) $microsPerUnit);
 
-        if ($micros > (float) \PHP_INT_MAX || $micros < (float) \PHP_INT_MIN) {
+        // PHP_INT_MAX (2^63 - 1) has no exact double representation and casts
+        // to (float) PHP_INT_MAX === 2^63 — one past the real maximum — so a
+        // strict `>` here would let exactly 2^63 slip through and silently
+        // wrap to PHP_INT_MIN on the `(int)` cast below. `>=` closes that gap.
+        // PHP_INT_MIN (-2^63) *is* exactly representable, so `<` is correct
+        // as-is on the lower bound.
+        if ($micros >= (float) \PHP_INT_MAX || $micros < (float) \PHP_INT_MIN) {
             throw new \InvalidArgumentException('Duration overflow: value exceeds the maximum representable duration');
         }
 

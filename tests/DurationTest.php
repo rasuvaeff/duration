@@ -302,6 +302,46 @@ final class DurationTest
         Duration::days(\PHP_INT_MAX);
     }
 
+    /**
+     * `(float) PHP_INT_MAX` has no exact double representation and rounds up
+     * to 2^63 — one past the true maximum. A value whose computed micros
+     * lands exactly on that rounded boundary must still be rejected (a
+     * strict `>` against `(float) PHP_INT_MAX` would let it through, and the
+     * subsequent `(int)` cast of 2^63 silently wraps to PHP_INT_MIN).
+     */
+    public function fromUnitRejectsExactlyAtTheFloatRoundedUpperBoundary(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration overflow');
+
+        Duration::seconds(9_223_372_036_854.775390625);
+    }
+
+    /**
+     * One representable double below the rounded boundary above: this is
+     * the largest value fromUnit() can actually produce and still be valid,
+     * and it must succeed rather than being caught by an overly eager check.
+     */
+    public function fromUnitAcceptsTheLargestValueJustBelowTheBoundary(): void
+    {
+        $duration = Duration::seconds(9_223_372_036_854.7734375);
+
+        Assert::same($duration->toMicros(), 9_223_372_036_854_773_760);
+    }
+
+    /**
+     * PHP_INT_MIN (-2^63) *is* exactly representable as a double, so a value
+     * that computes to exactly PHP_INT_MIN micros must pass the overflow
+     * check (it is not less than the boundary) and instead be rejected by
+     * the ordinary negative-value check in the constructor — proving the
+     * lower-bound comparison is a strict `<`, not `<=`.
+     */
+    public function fromUnitAtExactlyPhpIntMinFailsOnNegativityNotOverflow(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration cannot be negative');
+
+        Duration::seconds(\PHP_INT_MIN / 1_000_000);
+    }
+
     #[Property(runs: 200)]
     public function microsRoundTrip(int $micros): void
     {
