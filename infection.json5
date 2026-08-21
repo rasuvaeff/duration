@@ -10,14 +10,35 @@
     "testFramework": "testo",
     "minMsi": 93,
     "mutators": {
-        "@default": true
+        "@default": true,
+        // Every excluded line below has a PHP-level equivalent-mutant reason:
+        // the operand's type is already coerced the same way with or without
+        // the explicit cast/comparison, so removing it changes no observable
+        // behavior. Excluding them (rather than tolerating them as "escaped"
+        // via minMsi slack) keeps the gate meaningful: a real drop in killed
+        // mutants stays visible instead of hiding in the same budget as this
+        // documented noise.
+        "CastFloat": {
+            "ignoreSourceCodeByRegex": [
+                // %g always produces a well-formed numeric string; PHP 8's
+                // number-vs-numeric-string comparison already coerces it the
+                // same way the explicit (float) cast does.
+                "if \\(\\(float\\) \\$seconds < 60\\.0\\) \\{",
+                "if \\(\\(float\\) \\$minutes < 60\\.0\\) \\{",
+                "if \\(\\(float\\) \\$hours < 24\\.0\\) \\{",
+                // int * float already widens to float regardless of which
+                // operand carries the explicit cast.
+                "\\$micros = round\\(\\(float\\) \\$value \\* \\(float\\) \\$microsPerUnit\\);",
+                // float >= / < int coerces the int operand to float the same
+                // way (float) does; see the comment on this line in Duration.php.
+                "if \\(\\$micros >= \\(float\\) \\\\PHP_INT_MAX \\|\\| \\$micros < \\(float\\) \\\\PHP_INT_MIN\\) \\{"
+            ]
+        }
     }
-    // Four survivors are equivalent and intentionally not chased:
-    //  - min/max `<=`/`>=` → `<`/`>`: on equal inputs both branches return a
-    //    value-equal Duration (the contract is value equality via equals(),
-    //    not identity), so the mutation is unobservable without a brittle `===`
-    //    assertion that would contradict the value-object semantics.
-    //  - fromUnit `(float) $value` / `(float) $microsPerUnit` casts (×2): PHP
-    //    implicitly widens int→float on `int * float`, so the explicit casts
-    //    are stylistic, not behavioral.
+    // min/max `<=`/`>=` → `<`/`>` survive for a different reason: on equal
+    // inputs both branches return a value-equal Duration (the contract is
+    // value equality via equals(), not identity), so the mutation is
+    // unobservable without a brittle `===` assertion that would contradict
+    // the value-object semantics. Left as a tolerated (not excluded) survivor
+    // — two mutants, priced into minMsi.
 }
