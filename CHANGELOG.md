@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Mutation testing now counts uncovered code (`--with-uncovered`, `PublicVisibility` off, signature defaults ignored, as in the template): overall MSI 98% against `minMsi` 93. No source changes and no new tests were needed.
+
 ## 1.1.1 — 2026-08-21
 
 - Fix `toMillis()` violating its exact-ceil contract above 2^53 microseconds (~285 years): float division lost integer precision and the result was off by ±1 ms in both directions (including round-DOWN, the exact failure the contract forbids). Now pure integer arithmetic (`intdiv` + remainder), exact over the full range.
