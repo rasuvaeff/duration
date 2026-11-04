@@ -226,7 +226,7 @@ final readonly class Duration implements \Stringable
             return $hours . 'h';
         }
 
-        return self::formatDays($this->toDays());
+        return $this->formatDays($this->toDays());
     }
 
     private function toHours(): float
@@ -245,7 +245,7 @@ final readonly class Duration implements \Stringable
      * fractional part carries no meaningful information anyway, so the exact
      * whole number of days is rendered instead of a lossy `"1.23457e+6"`.
      */
-    private static function formatDays(float $days): string
+    private function formatDays(float $days): string
     {
         $formatted = \sprintf('%g', $days);
 
