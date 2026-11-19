@@ -270,6 +270,162 @@ final class DurationTest
         Assert::true(Duration::max(Duration::seconds(2), Duration::millis(2_000))->equals(Duration::seconds(2)));
     }
 
+    public function addIsAnAliasOfPlus(): void
+    {
+        Assert::true(Duration::millis(100)->add(Duration::millis(50))->equals(Duration::millis(150)));
+    }
+
+    public function subIsAnAliasOfMinus(): void
+    {
+        Assert::true(Duration::seconds(5)->sub(Duration::seconds(2))->equals(Duration::seconds(3)));
+        Assert::true(Duration::seconds(2)->sub(Duration::seconds(5))->isZero());
+    }
+
+    public function multiplyByScalesMicros(): void
+    {
+        Assert::true(Duration::millis(250)->multiplyBy(factor: 4)->equals(Duration::seconds(1)));
+    }
+
+    public function multiplyByZeroYieldsZero(): void
+    {
+        Assert::true(Duration::seconds(30)->multiplyBy(factor: 0)->isZero());
+    }
+
+    public function multiplyByRejectsNegativeFactor(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('must not be negative');
+
+        Duration::seconds(1)->multiplyBy(factor: -1);
+    }
+
+    public function multiplyByRejectsOverflow(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration overflow');
+
+        Duration::micros(\PHP_INT_MAX)->multiplyBy(factor: 2);
+    }
+
+    public function multiplyByAtTheOverflowBoundaryStillSucceeds(): void
+    {
+        Assert::same(Duration::micros(\PHP_INT_MAX)->multiplyBy(factor: 1)->toMicros(), \PHP_INT_MAX);
+    }
+
+    public function divideBySplitsMicros(): void
+    {
+        Assert::true(Duration::seconds(1)->divideBy(divisor: 4)->equals(Duration::millis(250)));
+    }
+
+    public function divideByTruncatesSubMicroRemainder(): void
+    {
+        Assert::same(Duration::micros(7)->divideBy(divisor: 2)->toMicros(), 3);
+    }
+
+    public function divideByOfZeroDurationStaysZero(): void
+    {
+        Assert::true(Duration::zero()->divideBy(divisor: 10)->isZero());
+    }
+
+    public function divideByRejectsZeroDivisor(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('must be positive');
+
+        Duration::seconds(1)->divideBy(divisor: 0);
+    }
+
+    public function divideByRejectsNegativeDivisor(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('must be positive');
+
+        Duration::seconds(1)->divideBy(divisor: -2);
+    }
+
+    public function compareReturnsSign(): void
+    {
+        Assert::same(Duration::compare(Duration::seconds(1), Duration::millis(1_000)), 0);
+        Assert::same(Duration::compare(Duration::seconds(1), Duration::seconds(2)), -1);
+        Assert::same(Duration::compare(Duration::seconds(2), Duration::seconds(1)), 1);
+    }
+
+    public function compareSortsAscending(): void
+    {
+        $durations = [Duration::seconds(2), Duration::millis(500), Duration::seconds(1)];
+        usort($durations, Duration::compare(...));
+
+        Assert::true($durations[0]->equals(Duration::millis(500)));
+        Assert::true($durations[1]->equals(Duration::seconds(1)));
+        Assert::true($durations[2]->equals(Duration::seconds(2)));
+    }
+
+    #[DataProvider('iso8601Provider')]
+    public function fromIso8601DurationStringParses(string $specification, int $expectedMicros): void
+    {
+        Assert::same(Duration::fromIso8601DurationString($specification)->toMicros(), $expectedMicros);
+    }
+
+    public static function iso8601Provider(): iterable
+    {
+        yield 'seconds' => ['PT30S', 30_000_000];
+        yield 'zero seconds' => ['PT0S', 0];
+        yield 'minutes' => ['PT2M', 120_000_000];
+        yield 'hours' => ['PT1H', 3_600_000_000];
+        yield 'combined' => ['PT1H30M10S', 5_410_000_000];
+        yield 'fractional seconds' => ['PT1.5S', 1_500_000];
+        yield 'micro fraction' => ['PT0.000001S', 1];
+        yield 'padded components' => ['PT01H02M03S', 3_723_000_000];
+    }
+
+    #[DataProvider('invalidIso8601Provider')]
+    public function fromIso8601DurationStringRejectsInvalid(string $specification): void
+    {
+        // A fragment unique to the regex gate: if the throw disappeared, the
+        // "at least one component" throw below would still fire with a
+        // different message, and the mutant would survive a shared prefix.
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('time-only');
+
+        Duration::fromIso8601DurationString($specification);
+    }
+
+    public static function invalidIso8601Provider(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'missing time part' => ['P'];
+        yield 'date component day' => ['P1D'];
+        yield 'date component with time' => ['P1DT2H'];
+        yield 'weeks' => ['P1W'];
+        yield 'date-part years' => ['P1Y2M'];
+        yield 'bare number' => ['30'];
+        yield 'lowercase designators' => ['pt30s'];
+        yield 'no designator' => ['PT30'];
+        yield 'unknown unit' => ['PT1D2S'];
+        yield 'double T' => ['PTPT1S'];
+        yield 'finer than microsecond precision' => ['PT0.0000001S'];
+        yield 'trailing garbage' => ['PT30Sx'];
+        yield 'leading garbage' => [' PT30S'];
+        yield 'negative component' => ['PT-30S'];
+    }
+
+    public function fromIso8601DurationStringRejectsEmptyTimeComponent(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('at least one of H, M, S');
+
+        Duration::fromIso8601DurationString('PT');
+    }
+
+    public function fromIso8601DurationStringRejectsHoursOverflow(): void
+    {
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration overflow');
+
+        Duration::fromIso8601DurationString('PT99999999999999H');
+    }
+
+    public function iso8601RoundTripsThroughToMicros(): void
+    {
+        $duration = Duration::fromIso8601DurationString('PT1H30M10.5S');
+
+        Assert::same($duration->toMicros(), 5_410_500_000);
+    }
+
+
     public function isZeroTrueForZero(): void
     {
         Assert::true(Duration::zero()->isZero());
@@ -578,6 +734,137 @@ final class DurationTest
         yield 'one microsecond over' => [1_001, 1_000];
         yield 'everything from nothing' => [0, 1_000_000];
     }
+
+    #[Property(runs: 300)]
+    public function multiplyByThenDivideByRoundTrips(int $micros, int $factor): void
+    {
+        $duration = Duration::micros($micros);
+
+        Assert::same($duration->multiplyBy(factor: $factor)->divideBy(divisor: $factor)->toMicros(), $micros);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function multiplyByThenDivideByRoundTripsGenerators(): array
+    {
+        // micros capped so micros * factor cannot overflow int — the property
+        // is about the divide-back round trip, not about the overflow branch.
+        return [
+            'micros' => Gen::intBetween(0, 1_000_000_000),
+            'factor' => Gen::intBetween(1, 1_000),
+        ];
+    }
+
+    /** @return iterable<string, array{int, int}> */
+    public static function multiplyByThenDivideByRoundTripsExamples(): iterable
+    {
+        yield 'zero duration' => [0, 7];
+        yield 'exact division' => [1_000, 4];
+        yield 'remainder truncation' => [7, 2];
+        yield 'factor one' => [123_456, 1];
+    }
+
+    #[Property(runs: 300)]
+    public function divideByNeverIncreases(int $micros, int $divisor): void
+    {
+        $duration = Duration::micros($micros);
+
+        Assert::true($duration->divideBy(divisor: $divisor)->toMicros() <= $micros);
+        Classify::cover($micros % $divisor !== 0, 'remainder is truncated', 5.0);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function divideByNeverIncreasesGenerators(): array
+    {
+        return [
+            'micros' => Gen::intBetween(0, 1_000_000_000),
+            'divisor' => Gen::intBetween(1, 1_000),
+        ];
+    }
+
+    #[Property]
+    public function addMatchesPlus(int $a, int $b): void
+    {
+        $left = Duration::micros($a)->add(Duration::micros($b));
+        $right = Duration::micros($a)->plus(Duration::micros($b));
+
+        Assert::true($left->equals($right));
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function addMatchesPlusGenerators(): array
+    {
+        return [
+            'a' => Gen::intBetween(0, 100_000_000),
+            'b' => Gen::intBetween(0, 100_000_000),
+        ];
+    }
+
+    #[Property]
+    public function subMatchesMinus(int $a, int $b): void
+    {
+        $left = Duration::micros($a)->sub(Duration::micros($b));
+        $right = Duration::micros($a)->minus(Duration::micros($b));
+
+        Assert::true($left->equals($right));
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function subMatchesMinusGenerators(): array
+    {
+        return [
+            'a' => Gen::intBetween(0, 100_000_000),
+            'b' => Gen::intBetween(0, 100_000_000),
+        ];
+    }
+
+    #[Property]
+    public function compareAgreesWithCompareTo(int $a, int $b): void
+    {
+        $left = Duration::micros($a);
+        $right = Duration::micros($b);
+
+        Assert::same(Duration::compare($left, $right), $left->compareTo($right));
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function compareAgreesWithCompareToGenerators(): array
+    {
+        return [
+            'a' => Gen::intBetween(0, 100_000_000),
+            'b' => Gen::intBetween(0, 100_000_000),
+        ];
+    }
+
+    #[Property(runs: 200)]
+    public function iso8601SecondsParseRoundTrip(int $micros): void
+    {
+        $duration = Duration::micros($micros);
+        // toSeconds() gives at most 6 fractional digits, so the ISO-8601
+        // string must parse back to the exact same value.
+        $reparsed = Duration::fromIso8601DurationString(
+            'PT' . rtrim(rtrim(\number_format($duration->toSeconds(), 6, '.', ''), '0'), '.') . 'S',
+        );
+
+        Assert::same($reparsed->toMicros(), $micros);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function iso8601SecondsParseRoundTripGenerators(): array
+    {
+        return [
+            'micros' => Gen::intBetween(0, 3_600_000_000),
+        ];
+    }
+
+    /** @return iterable<string, array{int}> */
+    public static function iso8601SecondsParseRoundTripExamples(): iterable
+    {
+        yield 'zero' => [0];
+        yield 'exact second' => [1_000_000];
+        yield 'sub-second fraction' => [1_500_000];
+        yield 'single micro' => [1];
+    }
+
 
     /** @return array<string, ArbitraryInterface> */
     public static function plusThenMinusRoundTripsGenerators(): array

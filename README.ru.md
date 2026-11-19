@@ -80,14 +80,32 @@ echo Duration::minutes(1.5); // outputs 1.5min
 |---|---|---|
 | `plus(Duration $other)` | `Duration` | Сумма двух длительностей |
 | `minus(Duration $other)` | `Duration` | Насыщающая разность — никогда не отрицательна (прошедший дедлайн даёт `0`) |
+| `add(Duration $other)` | `Duration` | Алиас `plus()` — соответствует неймингу `\Time\Duration` из PHP 8.6 |
+| `sub(Duration $other)` | `Duration` | Алиас `minus()` |
+| `multiplyBy(int $factor)` | `Duration` | Умножение на неотрицательный множитель; `0` даёт нулевую длительность |
+| `divideBy(int $divisor)` | `Duration` | Деление на положительный делитель; остаток меньше микросекунды отбрасывается |
 | `Duration::min($a, $b)` | `Duration` | Статический — меньшая из двух длительностей |
 | `Duration::max($a, $b)` | `Duration` | Статический — большая из двух длительностей |
+| `Duration::compare($a, $b)` | `int` | Статические `-1` / `0` / `1` — `usort($durations, Duration::compare(...))` |
 | `isZero()` | `bool` | Истинно для нулевой длительности |
 | `isPositive()` | `bool` | Истинно для ненулевой длительности |
 | `equals(Duration $other)` | `bool` | Равенство по длине |
 | `compareTo(Duration $other)` | `int` | `-1` / `0` / `1` |
 | `isGreaterThan(Duration $other)` | `bool` | Строго длиннее |
 | `isLessThan(Duration $other)` | `bool` | Строго короче |
+
+### ISO-8601 строки длительности
+
+```php
+Duration::fromIso8601DurationString('PT1H30M'); // 1.5 часа
+Duration::fromIso8601DurationString('PT30S');   // 30 секунд
+Duration::fromIso8601DurationString('PT1.5S');  // дробные секунды, точность до микросекунды
+Duration::fromIso8601DurationString('PT0S');    // нулевая длительность
+```
+
+Только временные компоненты (`PT…`), максимум `H` — компонент даты (`P1D`,
+`P1Y2M`) бросает исключение, как и нативный контракт PHP 8.6. Дробные секунды —
+до шести знаков; более точные отклоняются, а не обрезаются.
 
 ### Строковое представление
 

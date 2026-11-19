@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Add `\Time\Duration`-parity API (PHP 8.6 ships the native class; this package is the forward polyfill until consumers move to 8.6 — closer names make the future migration a type-hint swap): `multiplyBy(int)`, `divideBy(int)`, `add()`/`sub()` aliases of `plus()`/`minus()`, static `compare($a, $b)` for `usort(..., Duration::compare(...))`, and `Duration::fromIso8601DurationString()` parsing time-only `PT…H/M/S` strings (date components rejected, up to microsecond fractional precision). All additions are non-breaking; `plus()`/`minus()`/`compareTo()` stay unchanged.
 - Mutation testing now counts uncovered code (`--with-uncovered`, `PublicVisibility` off, signature defaults ignored, as in the template): overall MSI 98% against `minMsi` 93. No source changes and no new tests were needed.
 
 ## 1.1.1 — 2026-08-21
