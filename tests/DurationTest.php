@@ -372,6 +372,7 @@ final class DurationTest
         yield 'fractional seconds' => ['PT1.5S', 1_500_000];
         yield 'micro fraction' => ['PT0.000001S', 1];
         yield 'padded components' => ['PT01H02M03S', 3_723_000_000];
+        yield 'large integer part with fraction past float precision' => ['PT90071992547.409921S', 90_071_992_547_409_921];
     }
 
     #[DataProvider('invalidIso8601Provider')]
@@ -416,6 +417,41 @@ final class DurationTest
         Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration overflow');
 
         Duration::fromIso8601DurationString('PT99999999999999H');
+    }
+
+    public function fromIso8601DurationStringRejectsSecondsOverflow(): void
+    {
+        // 20 digits: above PHP_INT_MAX, caught by the length gate before the
+        // int cast can silently wrap.
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('seconds component exceeds');
+
+        Duration::fromIso8601DurationString('PT99999999999999999999S');
+    }
+
+    public function fromIso8601DurationStringRejectsSecondsOverflowAtNineteenDigits(): void
+    {
+        // 19 nines: fits the length gate but compares greater than
+        // PHP_INT_MAX, caught by the string comparison.
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('seconds component exceeds');
+
+        Duration::fromIso8601DurationString('PT9999999999999999999S');
+    }
+
+    public function fromIso8601DurationStringRejectsSecondsOverflowAtNineteenDigitsBelowIntMax(): void
+    {
+        // 19 digits BELOW PHP_INT_MAX (10^18): passes the gate, then the
+        // downstream seconds() overflow fires — a distinct message from the
+        // gate's, so the gate boundary itself stays mutation-killable.
+        Expect::exception(\InvalidArgumentException::class)->withMessageContaining('Duration overflow');
+
+        Duration::fromIso8601DurationString('PT1000000000000000000S');
+    }
+
+    public function fromIso8601DurationStringAcceptsPaddedSecondsPastTheGateLength(): void
+    {
+        // Leading zeros must not push a small value into the overflow gate:
+        // ltrim first, then the length check.
+        Assert::same(Duration::fromIso8601DurationString('PT000000000000000000009S')->toMicros(), 9_000_000);
     }
 
     public function iso8601RoundTripsThroughToMicros(): void

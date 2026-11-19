@@ -205,7 +205,24 @@ final readonly class Duration implements \Stringable
         }
 
         if (isset($matches['seconds'])) {
-            $duration = $duration->plus(self::fromUnit(value: (float) $matches['seconds'], microsPerUnit: self::MICROS_PER_SECOND));
+            // Integer arithmetic end to end: a float cast would lose
+            // microsecond precision for large values with a fractional part
+            // (floats past 2^53 cannot represent every integer). The whole
+            // part goes through the overflow-guarded factories; the fraction
+            // is at most 6 digits (microsecond resolution) and pads right.
+            $parts = explode('.', $matches['seconds']);
+            $whole = ltrim($parts[0], '0');
+            $fraction = $parts[1] ?? '';
+
+            if (\strlen($whole) > 19 || (\strlen($whole) === 19 && \strcmp($whole, (string) \PHP_INT_MAX) > 0)) {
+                throw new \InvalidArgumentException('Duration overflow: seconds component exceeds the maximum representable duration');
+            }
+
+            $duration = $duration->plus(self::seconds((int) $whole));
+
+            if ($fraction !== '') {
+                $duration = $duration->plus(new self(micros: (int) \str_pad($fraction, 6, '0')));
+            }
         }
 
         return $duration;
@@ -214,11 +231,12 @@ final readonly class Duration implements \Stringable
     /**
      * Static comparison form for `usort($durations, Duration::compare(...))`,
      * matching `\Time\Duration::compare()` — the instance method
-     * {@see compareTo()} stays for fluent comparisons.
+     * {@see compareTo()} stays for fluent comparisons. Delegates to
+     * `compareTo()` so there is a single comparison path.
      */
     public static function compare(self $a, self $b): int
     {
-        return $a->micros <=> $b->micros;
+        return $a->compareTo(other: $b);
     }
 
 
