@@ -17,7 +17,9 @@ Type-safe, immutable, non-negative duration value object. One class:
 - `seconds()` / `minutes()` accept `int|float`; a non-finite float (`INF`/`NAN`) throws `InvalidArgumentException` ("Duration must be finite").
 - `toMillis()` rounds **up** (`ceil`): a non-zero sub-millisecond duration never becomes `0` (`0ms` = "no timeout" to most clients). `toMicros()` is exact (storage unit); `toSeconds()` returns `float`.
 - `minus()` is **saturating**: subtracting a longer duration yields `0`, never negative. Comparisons go through `compareTo()`.
-- `min()` / `max()` are binary static factories (smaller / larger of two).
+- `min()` / `max()` are binary static factories (smaller / larger of two). `compare($a, $b)` is the static `-1|0|1` form for `usort(..., Duration::compare(...))`.
+- `add()` / `sub()` are aliases of `plus()` / `minus()` matching the PHP 8.6 `\Time\Duration` naming. `multiplyBy()` requires `factor >= 0`; `divideBy()` requires `divisor > 0` and truncates the sub-microsecond remainder; both throw `InvalidArgumentException` on overflow/invalid input.
+- `fromIso8601DurationString()` accepts time-only `PT…H/M/S` (max unit `H`, fraction <= 6 digits); a date component or finer precision throws `InvalidArgumentException`.
 - `__toString()` (Stringable) yields a human-readable form, choosing the largest unit with value >= 1: `"0"`, `"1µs"`, `"250ms"`, `"2.5s"`, `"1.5min"`, `"2h"`, `"1.5d"`. Milliseconds match `toMillis()` (rounded up); larger units use `%g` (trailing zeros trimmed). The format is an observable contract — changing it is a major bump.
 
 ## API
@@ -45,8 +47,17 @@ $d->toMinutes(); // 0.041666…  (float)
 Duration::millis(500)->plus(Duration::seconds(1));  // 1500ms
 Duration::seconds(5)->minus(Duration::seconds(2));  // 3s
 Duration::seconds(2)->minus(Duration::seconds(5));  // 0 (saturates)
+Duration::seconds(1)->add(Duration::seconds(1));    // alias of plus()
+Duration::seconds(5)->sub(Duration::seconds(1));    // alias of minus()
+Duration::seconds(1)->multiplyBy(factor: 4);        // 4s (factor >= 0)
+Duration::seconds(1)->divideBy(divisor: 4);         // 250ms (divisor > 0, truncates)
 Duration::min(Duration::seconds(1), Duration::seconds(2));  // 1s
 Duration::max(Duration::seconds(1), Duration::seconds(2));  // 2s
+usort($list, Duration::compare(...));               // static -1|0|1
+
+// ISO-8601 (time components only, max unit H)
+Duration::fromIso8601DurationString('PT1H30M');     // 1.5h
+Duration::fromIso8601DurationString('PT1.5S');      // 1500ms (<= 6 fractional digits)
 
 // Comparison
 $d->isZero();                              // bool

@@ -121,6 +121,126 @@ final readonly class Duration implements \Stringable
     }
 
     /**
+     * Native `\Time\Duration` naming for {@see plus()} — the RFC adopted full
+     * verb names (`add`, `sub`, `multiplyBy`, `divideBy`), so consumer code can
+     * later switch to the native class by changing the type-hint only.
+     */
+    public function add(self $other): self
+    {
+        return $this->plus(other: $other);
+    }
+
+    /**
+     * Native `\Time\Duration` naming for {@see minus()}.
+     */
+    public function sub(self $other): self
+    {
+        return $this->minus(other: $other);
+    }
+
+    /**
+     * The duration scaled by a non-negative integer factor, matching
+     * `\Time\Duration::multiplyBy()`. Zero is allowed: scaling a timeout to
+     * zero is a valid "disable" in many configs.
+     */
+    public function multiplyBy(int $factor): self
+    {
+        if ($factor < 0) {
+            throw new \InvalidArgumentException('Factor must not be negative');
+        }
+
+        $scaled = $this->micros * $factor;
+
+        if (!is_int($scaled)) {
+            throw new \InvalidArgumentException('Duration overflow: product exceeds the maximum representable duration');
+        }
+
+        return new self(micros: $scaled);
+    }
+
+    /**
+     * The duration divided by a positive integer divisor, matching
+     * `\Time\Duration::divideBy()`. Sub-microsecond remainders are truncated
+     * (intdiv), mirroring the native class truncating fractional nanoseconds.
+     */
+    public function divideBy(int $divisor): self
+    {
+        if ($divisor <= 0) {
+            throw new \InvalidArgumentException('Divisor must be positive');
+        }
+
+        return new self(micros: intdiv($this->micros, $divisor));
+    }
+
+    /**
+     * Parse an ISO-8601 duration string with a time component only, matching
+     * the native `\Time\Duration::fromIso8601DurationString()` contract: a
+     * date component is rejected and the biggest allowed component is `H`.
+     *
+     * Fractional seconds are accepted with up to six digits (microsecond
+     * resolution — the package's storage precision); finer precision is
+     * rejected instead of being silently truncated. `"PT0S"` is valid and
+     * yields the zero duration.
+     */
+    public static function fromIso8601DurationString(string $specification): self
+    {
+        $regex = '/^PT(?:(?<hours>\d+)H)?(?:(?<minutes>\d+)M)?(?:(?<seconds>\d+(?:\.\d{1,6})?)S)?\z/';
+
+        if (preg_match($regex, $specification, $matches) !== 1) {
+            throw new \InvalidArgumentException('Invalid ISO-8601 duration: time-only "PT…H/M/S" expected, date components are not supported');
+        }
+
+        if (!isset($matches['hours']) && !isset($matches['minutes']) && !isset($matches['seconds'])) {
+            throw new \InvalidArgumentException('Invalid ISO-8601 duration: at least one of H, M, S components is required');
+        }
+
+        $duration = new self(micros: 0);
+
+        if (isset($matches['hours'])) {
+            $duration = $duration->plus(self::fromUnit(value: (int) $matches['hours'], microsPerUnit: self::MICROS_PER_HOUR));
+        }
+
+        if (isset($matches['minutes'])) {
+            $duration = $duration->plus(self::fromUnit(value: (int) $matches['minutes'], microsPerUnit: self::MICROS_PER_MINUTE));
+        }
+
+        if (isset($matches['seconds'])) {
+            // Integer arithmetic end to end: a float cast would lose
+            // microsecond precision for large values with a fractional part
+            // (floats past 2^53 cannot represent every integer). The whole
+            // part goes through the overflow-guarded factories; the fraction
+            // is at most 6 digits (microsecond resolution) and pads right.
+            $parts = explode('.', $matches['seconds']);
+            $whole = ltrim($parts[0], '0');
+            $fraction = $parts[1] ?? '';
+
+            if (\strlen($whole) > 19 || (\strlen($whole) === 19 && \strcmp($whole, (string) \PHP_INT_MAX) > 0)) {
+                throw new \InvalidArgumentException('Duration overflow: seconds component exceeds the maximum representable duration');
+            }
+
+            $duration = $duration->plus(self::seconds((int) $whole));
+
+            if ($fraction !== '') {
+                $duration = $duration->plus(new self(micros: (int) \str_pad($fraction, 6, '0')));
+            }
+        }
+
+        return $duration;
+    }
+
+    /**
+     * Static comparison form for `usort($durations, Duration::compare(...))`,
+     * matching `\Time\Duration::compare()` — the instance method
+     * {@see compareTo()} stays for fluent comparisons. Delegates to
+     * `compareTo()` so there is a single comparison path.
+     */
+    public static function compare(self $a, self $b): int
+    {
+        return $a->compareTo(other: $b);
+    }
+
+
+    /**
      * The smaller of two durations.
      */
     public static function min(self $a, self $b): self

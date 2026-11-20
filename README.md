@@ -77,14 +77,32 @@ most HTTP clients — the exact failure a timeout value is meant to prevent.
 |---|---|---|
 | `plus(Duration $other)` | `Duration` | Sum of two durations |
 | `minus(Duration $other)` | `Duration` | Saturating difference — never negative (a passed deadline is `0`) |
+| `add(Duration $other)` | `Duration` | Alias of `plus()` — matches the PHP 8.6 `\Time\Duration` naming |
+| `sub(Duration $other)` | `Duration` | Alias of `minus()` |
+| `multiplyBy(int $factor)` | `Duration` | Scaled by a non-negative factor; `0` yields the zero duration |
+| `divideBy(int $divisor)` | `Duration` | Divided by a positive divisor; sub-microsecond remainders truncate |
 | `Duration::min($a, $b)` | `Duration` | Static — the smaller of two durations |
 | `Duration::max($a, $b)` | `Duration` | Static — the larger of two durations |
+| `Duration::compare($a, $b)` | `int` | Static `-1` / `0` / `1` — `usort($durations, Duration::compare(...))` |
 | `isZero()` | `bool` | True when zero-length |
 | `isPositive()` | `bool` | True when non-zero |
 | `equals(Duration $other)` | `bool` | Equal length |
 | `compareTo(Duration $other)` | `int` | `-1` / `0` / `1` |
 | `isGreaterThan(Duration $other)` | `bool` | Strictly longer |
 | `isLessThan(Duration $other)` | `bool` | Strictly shorter |
+
+### ISO-8601 duration strings
+
+```php
+Duration::fromIso8601DurationString('PT1H30M'); // 1.5 hours
+Duration::fromIso8601DurationString('PT30S');   // 30 seconds
+Duration::fromIso8601DurationString('PT1.5S');  // fractional seconds, microsecond precision
+Duration::fromIso8601DurationString('PT0S');    // the zero duration
+```
+
+Time components only (`PT…`), biggest unit `H` — a date component (`P1D`,
+`P1Y2M`) throws, matching the PHP 8.6 native contract. Fractional seconds
+carry up to six digits; finer precision is rejected, not truncated.
 
 ### String representation
 
