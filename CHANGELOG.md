@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **Changed:** PHP 8.6 is supported: the `php` constraint is widened to
+  `8.3 - 8.6` (#28). CI runs PHP 8.6 as a regular matrix entry; the
+  backward-compatibility job runs on PHP 8.5.
+
 ## 1.2.0 — 2026-11-20
 
 - Add `\Time\Duration`-parity API (PHP 8.6 ships the native class; this package is the forward polyfill until consumers move to 8.6 — closer names make the future migration a type-hint swap): `multiplyBy(int)`, `divideBy(int)`, `add()`/`sub()` aliases of `plus()`/`minus()`, static `compare($a, $b)` for `usort(..., Duration::compare(...))`, and `Duration::fromIso8601DurationString()` parsing time-only `PT…H/M/S` strings (date components rejected, up to microsecond fractional precision). All additions are non-breaking; `plus()`/`minus()`/`compareTo()` stay unchanged.
