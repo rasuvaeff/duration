@@ -121,9 +121,11 @@ final readonly class Duration implements \Stringable
     }
 
     /**
-     * Native `\Time\Duration` naming for {@see plus()} — the RFC adopted full
-     * verb names (`add`, `sub`, `multiplyBy`, `divideBy`), so consumer code can
-     * later switch to the native class by changing the type-hint only.
+     * Native `\Time\Duration` naming for {@see plus()}: the RFC adopted full
+     * verb names (`add`, `sub`, `multiplyBy`, `divideBy`). Only the names
+     * match. The two classes still differ in sign, precision and factories
+     * (see README, "PHP 8.6"), so moving to the native class takes more than
+     * a type-hint change.
      */
     public function add(self $other): self
     {
@@ -131,7 +133,9 @@ final readonly class Duration implements \Stringable
     }
 
     /**
-     * Native `\Time\Duration` naming for {@see minus()}.
+     * Native `\Time\Duration` naming for {@see minus()} and, like it,
+     * saturating: a longer `$other` yields zero, while the native `sub()`
+     * returns a negative duration.
      */
     public function sub(self $other): self
     {
