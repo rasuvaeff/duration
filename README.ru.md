@@ -126,6 +126,39 @@ Duration::fromIso8601DurationString('PT0S');    // нулевая длитель
 изменение является повышением **major**-версии. Для машиночитаемых значений
 используйте напрямую `toMicros()` / `toMillis()` / `toSeconds()` / `toMinutes()`.
 
+## PHP 8.6: нативный `\Time\Duration`
+
+В PHP 8.6 появился нативный класс
+[`\Time\Duration`](https://www.php.net/manual/en/class.time-duration.php). На PHP 8.3–8.5
+нужен этот пакет; на 8.6 можно сразу брать нативный класс. Пакет продолжает работать
+на 8.6, принудительной миграции нет — долгосрочный план в
+[#24](https://github.com/rasuvaeff/duration/issues/24).
+
+Классы **не** взаимозаменяемы без правок. Сверено на PHP 8.6.0:
+
+| | `Rasuvaeff\Duration\Duration` | `\Time\Duration` |
+|---|---|---|
+| PHP | 8.3+ | 8.6+ |
+| Точность | микросекунды | наносекунды |
+| Знак | никогда не отрицательный | со знаком: `negate()`, `sub()` уходит ниже нуля; фабрики отрицательный вход отвергают |
+| `sub()` большей длительности | `0` (насыщение) | отрицательная длительность |
+| Фабрики | `micros()`, `millis()`, `seconds()`, `minutes()`, `hours()`, `days()`; от секунд и выше принимают `float` | `fromNanoseconds()` … `fromHours()`, только `int`; дней нет |
+| ISO 8601 | `PT…H/M/S`, дробные секунды до 6 знаков | `PT…H/M/S`, дробные секунды отвергаются |
+| Чтение значения | `toMicros()`, `toMillis()` (с округлением вверх), `toSeconds()`, `toMinutes()` | `readonly`-свойства `seconds`, `nanoseconds`, `negative` |
+| Сравнение | `compareTo()`, `equals()`, `isGreaterThan()`, `min()`, `max()`, `compare()` | `<`, `>`, `==`, `min()`, `max()`, `clamp()`, `compare()` |
+| Строка | `Stringable`: `"250ms"`, `"2.5s"` | не `Stringable` |
+
+Преобразование на границе:
+
+```php
+$native = \Time\Duration::fromMicroseconds($duration->toMicros());
+
+// отрицательная нативная длительность здесь бросит исключение: пакет её не принимает
+$duration = Duration::micros($native->seconds * 1_000_000 + intdiv($native->nanoseconds, 1_000));
+```
+
+На обратном пути точность меньше микросекунды отбрасывается.
+
 ## Безопасность
 
 Не относится к security-чувствительному коду: чистый value object без побочных

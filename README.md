@@ -123,6 +123,40 @@ The unit set, rounding and suffix spelling are an observable contract: changing
 them is a **major** version bump. For machine-readable values use `toMicros()` /
 `toMillis()` / `toSeconds()` / `toMinutes()` directly.
 
+## PHP 8.6: native `\Time\Duration`
+
+PHP 8.6 ships a native [`\Time\Duration`](https://www.php.net/manual/en/class.time-duration.php)
+class. On PHP 8.3–8.5 this package is the way to go; on 8.6 you can use the
+native class directly. This package keeps working on 8.6 and gets no forced
+migration — the long-term plan is tracked in
+[#24](https://github.com/rasuvaeff/duration/issues/24).
+
+The two classes are **not** drop-in replacements for each other. Checked
+against PHP 8.6.0:
+
+| | `Rasuvaeff\Duration\Duration` | `\Time\Duration` |
+|---|---|---|
+| PHP | 8.3+ | 8.6+ |
+| Precision | microseconds | nanoseconds |
+| Sign | never negative | signed: `negate()`, `sub()` can go below zero; factories reject negative input |
+| `sub()` of a longer duration | `0` (saturating) | negative duration |
+| Factories | `micros()`, `millis()`, `seconds()`, `minutes()`, `hours()`, `days()`; seconds and larger accept `float` | `fromNanoseconds()` … `fromHours()`, `int` only; no days |
+| ISO 8601 | `PT…H/M/S`, fractional seconds up to 6 digits | `PT…H/M/S`, fractional seconds rejected |
+| Reading the value | `toMicros()`, `toMillis()` (rounded up), `toSeconds()`, `toMinutes()` | `readonly` properties `seconds`, `nanoseconds`, `negative` |
+| Comparison | `compareTo()`, `equals()`, `isGreaterThan()`, `min()`, `max()`, `compare()` | `<`, `>`, `==`, `min()`, `max()`, `clamp()`, `compare()` |
+| String | `Stringable`: `"250ms"`, `"2.5s"` | not `Stringable` |
+
+Converting at a boundary:
+
+```php
+$native = \Time\Duration::fromMicroseconds($duration->toMicros());
+
+// a negative native duration throws here: the package rejects it
+$duration = Duration::micros($native->seconds * 1_000_000 + intdiv($native->nanoseconds, 1_000));
+```
+
+Sub-microsecond precision is truncated on the way back.
+
 ## Security
 
 Not security-sensitive: a pure, side-effect-free value object. It performs no
